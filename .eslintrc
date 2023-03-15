@@ -1,0 +1,17 @@
+{
+  "extends": [
+    "plugin:unicorn/recommended",
+    "airbnb-base",
+    "airbnb-typescript/base",
+    "prettier"
+  ],
+  "parserOptions": {
+    "project": "./tsconfig.json"
+  },
+  "reportUnusedDisableDirectives": true,
+  "rules": {
+    "no-param-reassign": "off",
+    "@typescript-eslint/no-shadow": "off",
+    "@typescript-eslint/prefer-regexp-exec": "error"
+  }
+}
