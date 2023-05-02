@@ -51,23 +51,18 @@ export const remBase = 16
 
 const toString = (string: string | number) => string.toString().toLowerCase()
 
-const toDecimal = (ratio: string | number) => {
-  let decimal = Number(ratio)
+const toFloat = (string: string | number) => Number.parseFloat(toString(string))
 
-  if (!decimal) {
-    const numbers = /^(\d+)\s*\/\s*(\d+)$/.exec(toString(ratio)) as unknown as [
-      string,
-      number,
-      number,
-    ]
-    decimal = numbers[1] / numbers[2]
-  }
-
-  return decimal
-}
+const toDecimal = (ratio: string | number) =>
+  Number(
+    toString(ratio).replace(
+      /^(\d+)\s*\/\s*(\d+)$/,
+      (_, a, b) => (a / b) as any,
+    ),
+  )
 
 const toDpi = (resolution: string | number) => {
-  const value = Number.parseFloat(toString(resolution))
+  const value = toFloat(resolution)
   const units = RE_RESOLUTION_UNIT.exec(toString(resolution))![1]
 
   switch (units) {
@@ -84,7 +79,7 @@ const toDpi = (resolution: string | number) => {
 }
 
 const toPx = (length: string | number) => {
-  const value = Number.parseFloat(toString(length))
+  const value = toFloat(length)
   const units = RE_LENGTH_UNIT.exec(toString(length))![1]
 
   switch (units) {
@@ -257,8 +252,8 @@ export function match(
         case "color":
         case "color-index":
         case "monochrome": {
-          expValue = Number.parseInt(expValue, 10) || 1
-          value = Number.parseInt(toString(value), 10) || 0
+          expValue = Number(expValue) || 1
+          value = Number(toString(value)) || 0
           break
         }
         // case "orientation":
