@@ -10,12 +10,8 @@ export interface MediaValues {
   orientation: "portrait" | "landscape"
   width: string | number
   height: string | number
-  "device-width": string | number
-  "device-height": string | number
   resolution: string | number
   "aspect-ratio": string | number
-  "device-aspect-ratio": string | number
-  "device-pixel-ratio": string | number
   grid: 0 | 1
   color: number
   "color-gamut": "srgb" | "p3" | "rec2020"
@@ -140,11 +136,14 @@ export function parse(query: string): AST {
     // Remove comments first
     query = query.replace(RE_COMMENTS, "").trim()
 
+    const createSyntaxError = () =>
+      new SyntaxError(`Invalid CSS media query: "${query}"`)
+
     const captures = RE_MEDIA_QUERY.exec(query)
 
     // Media Query must be valid
     if (!captures) {
-      throw new SyntaxError(`Invalid CSS media query: "${query}"`)
+      throw createSyntaxError()
     }
 
     const modifier = captures[1]
@@ -168,7 +167,7 @@ export function parse(query: string): AST {
 
     // Media Query must be valid
     if (!expressions) {
-      throw new SyntaxError(`Invalid CSS media query: "${query}"`)
+      throw createSyntaxError()
     }
 
     parsed.expressions = expressions.map((expression) => {
@@ -176,7 +175,7 @@ export function parse(query: string): AST {
 
       // Media Query must be valid
       if (!captures) {
-        throw new SyntaxError(`Invalid CSS media query: "${query}"`)
+        throw createSyntaxError()
       }
 
       const feature = RE_MQ_FEATURE.exec(toString(captures[1]))!
@@ -227,31 +226,25 @@ export function match(
         return false
       }
 
-      switch (feature) {
-        case "width":
-        case "height":
-        case "device-width":
-        case "device-height": {
+      switch (true) {
+        // case "width":
+        // case "height":
+        case /^(device-)?(width|height)$/.test(feature): {
           expValue = toPx(expValue)
           value = toPx(value)
           break
         }
-        case "resolution": {
+        case /^resolution$/.test(feature): {
           expValue = toDpi(expValue)
           value = toDpi(value)
           break
         }
-        case "aspect-ratio":
-        case "device-aspect-ratio":
-        case "device-pixel-ratio": {
+        case /^(device-)?(aspect|pixel)-ratio$/.test(feature): {
           expValue = toDecimal(expValue)
           value = toDecimal(value)
           break
         }
-        case "grid":
-        case "color":
-        case "color-index":
-        case "monochrome": {
+        case /^(grid|color(-index)?|monochrome)$/.test(feature): {
           expValue = Number(expValue) || 1
           value = Number(toString(value)) || 0
           break
