@@ -3,7 +3,7 @@ const RE_MEDIA_QUERY =
 const RE_MQ_EXPRESSION = /^\(\s*([_a-z-][\d_a-z-]*)\s*(?::\s*([^)]+))?\s*\)$/
 const RE_MQ_FEATURE = /^(?:-(webkit|moz|o)-)?(?:(min|max)-)?(?:-(moz)-)?(.+)/
 const RE_LENGTH_UNIT = /(em|rem|px|cm|mm|in|pt|pc)?\s*$/
-const RE_RESOLUTION_UNIT = /(dpi|dpcm|dppx)?\s*$/
+const RE_RESOLUTION_UNIT = /(dpi|dpcm|dppx|x)?\s*$/
 const RE_COMMENTS = /\/\*[^*]*\*+([^/][^*]*\*+)*\//gi
 
 export interface MediaValues {
@@ -59,54 +59,35 @@ const toDecimal = (ratio: string | number) =>
 
 const toDpi = (resolution: string | number) => {
   const value = toFloat(resolution)
-  const units = RE_RESOLUTION_UNIT.exec(toString(resolution))![1]
+  const units = RE_RESOLUTION_UNIT.exec(toString(resolution))?.[1]
 
-  switch (units) {
-    case "dpcm": {
-      return value / 2.54
-    }
-    case "dppx": {
-      return value * 96
-    }
-    default: {
-      return value
-    }
+  const unitMap: Record<string, number> = {
+    dpcm: 1 / 2.54,
+    dppx: 96,
+    x: 96,
   }
+
+  return units ? value * (unitMap[units] || 1) : value
 }
 
 const toPx = (length: string | number) => {
   const value = toFloat(length)
-  const units = RE_LENGTH_UNIT.exec(toString(length))![1]
+  const units = RE_LENGTH_UNIT.exec(toString(length))?.[1]
 
-  switch (units) {
-    case "em": {
-      return value * remBase
-    }
-    case "rem": {
-      return value * remBase
-    }
-    case "cm": {
-      return (value * 96) / 2.54
-    }
-    case "mm": {
-      return (value * 96) / 2.54 / 10
-    }
-    case "in": {
-      return value * 96
-    }
-    case "pt": {
-      return value * 72
-    }
-    case "pc": {
-      return (value * 72) / 12
-    }
-    default: {
-      return value
-    }
+  const unitMap: Record<string, number> = {
+    em: remBase,
+    rem: remBase,
+    cm: 96 / 2.54,
+    mm: 96 / 25.4,
+    in: 96,
+    pt: 96 / 72,
+    pc: 96 / 6,
   }
+
+  return units ? value * (unitMap[units] || 1) : value
 }
 
-const cache: Record<string, AST> = {}
+const cache = new Map<string, AST>()
 
 /**
  * Parses a Media Query expression and returns an AST.
@@ -128,13 +109,13 @@ const cache: Record<string, AST> = {}
  *   ];
  */
 export function parse(query: string): AST {
-  if (cache[query]) {
-    return cache[query]
+  if (cache.has(query)) {
+    return cache.get(query) as AST
   }
 
-  const ast = query.split(",").map((query) => {
+  const ast = query.split(",").map<QueryNode>((query) => {
     // Remove comments first
-    query = query.replace(RE_COMMENTS, "").trim()
+    query = query.replaceAll(RE_COMMENTS, "").trim()
 
     const createSyntaxError = () =>
       new SyntaxError(`Invalid CSS media query: "${query}"`)
@@ -146,51 +127,41 @@ export function parse(query: string): AST {
       throw createSyntaxError()
     }
 
-    const modifier = captures[1]
-    const type = captures[2]
-    let expressions: string | string[] | null = (
-      (captures[3] || "") + (captures[4] || "")
-    ).trim()
-    const parsed: QueryNode = {
-      inverse: !!modifier && toString(modifier) === "not",
-      type: type ? toString(type) : "all",
-      expressions: [],
-    }
-
-    // Check for Media Query expressions
-    if (!expressions) {
-      return parsed
-    }
-
-    // Split expressions into a list
-    expressions = expressions.match(/\([^)]+\)/g)
+    const [, modifier, type] = captures
+    const expressions = ((captures[3] || "") + (captures[4] || ""))
+      .trim()
+      // Split expressions into a list
+      .match(/\([^)]+\)/g)
 
     // Media Query must be valid
-    if (!expressions) {
+    if (!expressions && !modifier && !type) {
       throw createSyntaxError()
     }
 
-    parsed.expressions = expressions.map((expression) => {
-      const captures = RE_MQ_EXPRESSION.exec(expression)
+    return {
+      inverse: modifier === "not",
+      type: type || "all",
+      expressions:
+        expressions?.map((expression) => {
+          const captures = RE_MQ_EXPRESSION.exec(expression)
 
-      // Media Query must be valid
-      if (!captures) {
-        throw createSyntaxError()
-      }
+          // Media Query must be valid
+          if (!captures) {
+            throw createSyntaxError()
+          }
 
-      const feature = RE_MQ_FEATURE.exec(toString(captures[1]))!
+          const feature = RE_MQ_FEATURE.exec(toString(captures[1]))!
 
-      return {
-        modifier: feature[2],
-        feature: feature[4],
-        value: captures[2],
-      } as Expression
-    })
-
-    return parsed
+          return {
+            modifier: feature[2],
+            feature: feature[4],
+            value: captures[2],
+          } as Expression
+        }) || [],
+    }
   })
 
-  cache[query] = ast
+  cache.set(query, ast)
   return ast
 }
 
@@ -260,7 +231,7 @@ export function match(
         // case "any-hover":
         // case "any-pointer":
         default: {
-          return toString(value) === toString(expValue)
+          return value === expValue
         }
       }
 
