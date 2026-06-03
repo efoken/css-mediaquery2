@@ -1,6 +1,6 @@
 {
   "name": "css-mediaquery2",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "description": "Parses and determines if a given CSS Media Query matches a set of values.",
   "bugs": {
     "url": "https://github.com/efoken/css-mediaquery2/issues"
