@@ -1,6 +1,6 @@
 const RE_MEDIA_QUERY =
   /^(?:(only|not)?\s*([_a-z][\w-]*)|(\([^)]+\)))(?:\s*and\s*(.*))?$/i
-const RE_MQ_EXPRESSION = /^\(\s*([_a-z-][\d_a-z-]*)\s*(?::\s*([^)]+))?\s*\)$/
+const RE_MQ_EXPRESSION = /^\(\s*([_a-z-][\d_a-z-]*)\s*(?::\s*([^)]+))?\s*\)$/i
 const RE_MQ_FEATURE = /^(?:-(webkit|moz|o)-)?(?:(min|max)-)?(?:-(moz)-)?(.+)/
 const RE_LENGTH_UNIT = /(em|rem|px|cm|mm|in|pt|pc)?\s*$/
 const RE_RESOLUTION_UNIT = /(dpi|dpcm|dppx|x)?\s*$/
@@ -29,11 +29,12 @@ export interface MediaValues {
   type: string
 }
 
+type Comparator = "=" | "<" | "<=" | ">" | ">="
+
 interface Expression {
-  modifier?: "min" | "max"
   feature: keyof MediaValues
   value: string
-  comparator?: "<" | "<=" | ">" | ">="
+  comparator: Comparator
 }
 
 interface QueryNode {
@@ -44,7 +45,12 @@ interface QueryNode {
 
 export type AST = QueryNode[]
 
-const REM_BASE = 16
+const comparatorMap: Record<string, Comparator> = {
+  "<": ">",
+  "<=": ">=",
+  ">": "<",
+  ">=": "<=",
+}
 
 const toString = (string: string | number) => string.toString().toLowerCase()
 
@@ -58,37 +64,37 @@ const toDecimal = (ratio: string | number) =>
     ),
   )
 
+const dpiUnits: Record<string, number> = {
+  dpcm: 1 / 2.54,
+  dppx: 96,
+  x: 96,
+}
+
 const toDpi = (resolution: string | number) => {
   const value = toFloat(resolution)
   const units = RE_RESOLUTION_UNIT.exec(toString(resolution))?.[1]
 
-  const unitMap: Record<string, number> = {
-    dpcm: 1 / 2.54,
-    dppx: 96,
-    x: 96,
-  }
+  return units ? value * (dpiUnits[units] || 1) : value
+}
 
-  return units ? value * (unitMap[units] || 1) : value
+const pxUnits: Record<string, number> = {
+  em: 16,
+  rem: 16,
+  cm: 96 / 2.54,
+  mm: 96 / 25.4,
+  in: 96,
+  pt: 96 / 72,
+  pc: 96 / 6,
 }
 
 const toPx = (length: string | number) => {
   const value = toFloat(length)
   const units = RE_LENGTH_UNIT.exec(toString(length))?.[1]
 
-  const unitMap: Record<string, number> = {
-    em: REM_BASE,
-    rem: REM_BASE,
-    cm: 96 / 2.54,
-    mm: 96 / 25.4,
-    in: 96,
-    pt: 96 / 72,
-    pc: 96 / 6,
-  }
-
-  return units ? value * (unitMap[units] || 1) : value
+  return units ? value * (pxUnits[units] || 1) : value
 }
 
-const isFeatureToken = (string: string) => /^[a-zA-Z_-][\w-]*$/.test(string)
+const isFeatureToken = (string: string) => /^[_a-z-][\d_a-z-]*$/i.test(string)
 
 const cache = new Map<string, AST>()
 
@@ -112,13 +118,14 @@ const cache = new Map<string, AST>()
  *   ];
  */
 export function parse(query: string): AST {
-  if (cache.has(query)) {
-    return cache.get(query) as AST
+  const cached = cache.get(query)
+  if (cached) {
+    return cached
   }
 
   const ast = query.split(",").map<QueryNode>((query) => {
     // Remove comments first
-    query = query.replaceAll(RE_COMMENTS, "").trim()
+    query = query.replace(RE_COMMENTS, "").trim()
 
     const createSyntaxError = () =>
       new SyntaxError(`Invalid CSS media query: "${query}"`)
@@ -159,10 +166,14 @@ export function parse(query: string): AST {
 
             return [
               {
-                modifier: feature[2],
                 feature: feature[4],
                 value: captures[2],
-                comparator: undefined,
+                comparator:
+                  feature[2] === "min"
+                    ? ">="
+                    : feature[2] === "max"
+                      ? "<="
+                      : "=",
               } as Expression,
             ]
           }
@@ -176,97 +187,33 @@ export function parse(query: string): AST {
             .filter(Boolean)
 
           if (parts.length === 3) {
-            const [left, comparator, right] = parts
+            const [left, op, right] = parts
             // Determine which side is the feature
             if (isFeatureToken(left)) {
-              const feature = left.toLowerCase() as keyof MediaValues
+              const feature = toString(left)
               // left < right => feature < right (max, comparator '<' or '<=')
               // left > right => feature > right (min, comparator '>' or '>=')
-              if (comparator === "<") {
-                return [
-                  {
-                    modifier: "max",
-                    feature,
-                    value: right,
-                    comparator: "<",
-                  } as Expression,
-                ]
-              }
-              if (comparator === "<=") {
-                return [
-                  {
-                    modifier: "max",
-                    feature,
-                    value: right,
-                    comparator: "<=",
-                  } as Expression,
-                ]
-              }
-              if (comparator === ">") {
-                return [
-                  {
-                    modifier: "min",
-                    feature,
-                    value: right,
-                    comparator: ">",
-                  } as Expression,
-                ]
-              }
-              if (comparator === ">=") {
-                return [
-                  {
-                    modifier: "min",
-                    feature,
-                    value: right,
-                    comparator: ">=",
-                  } as Expression,
-                ]
-              }
+              const comparator = op as Comparator
+              return [
+                {
+                  feature,
+                  value: right,
+                  comparator,
+                } as Expression,
+              ]
             }
 
             if (isFeatureToken(right)) {
-              const feature = right.toLowerCase() as keyof MediaValues
+              const feature = toString(right)
               // left < right => left < feature => feature > left
-              if (comparator === "<") {
-                return [
-                  {
-                    modifier: "min",
-                    feature,
-                    value: left,
-                    comparator: ">",
-                  } as Expression,
-                ]
-              }
-              if (comparator === "<=") {
-                return [
-                  {
-                    modifier: "min",
-                    feature,
-                    value: left,
-                    comparator: ">=",
-                  } as Expression,
-                ]
-              }
-              if (comparator === ">") {
-                return [
-                  {
-                    modifier: "max",
-                    feature,
-                    value: left,
-                    comparator: "<",
-                  } as Expression,
-                ]
-              }
-              if (comparator === ">=") {
-                return [
-                  {
-                    modifier: "max",
-                    feature,
-                    value: left,
-                    comparator: "<=",
-                  } as Expression,
-                ]
-              }
+              const comparator = comparatorMap[op]
+              return [
+                {
+                  feature,
+                  value: left,
+                  comparator,
+                } as Expression,
+              ]
             }
           }
 
@@ -278,76 +225,30 @@ export function parse(query: string): AST {
               throw createSyntaxError()
             }
 
-            const feature = middle.toLowerCase() as keyof MediaValues
+            const feature = toString(middle) as keyof MediaValues
             const expressions: Expression[] = []
 
             // left op1 middle
-            if (op1 === "<") {
-              expressions.push({
-                modifier: "min",
-                feature,
-                value: left,
-                comparator: ">",
-              })
-            } else if (op1 === "<=") {
-              expressions.push({
-                modifier: "min",
-                feature,
-                value: left,
-                comparator: ">=",
-              })
-            } else if (op1 === ">") {
-              expressions.push({
-                modifier: "max",
-                feature,
-                value: left,
-                comparator: "<",
-              })
-            } else if (op1 === ">=") {
-              expressions.push({
-                modifier: "max",
-                feature,
-                value: left,
-                comparator: "<=",
-              })
-            }
+            let comparator = comparatorMap[op1]
+            expressions.push({
+              feature,
+              value: left,
+              comparator,
+            })
 
             // middle op2 right
-            if (op2 === "<") {
-              expressions.push({
-                modifier: "max",
-                feature,
-                value: right,
-                comparator: "<",
-              })
-            } else if (op2 === "<=") {
-              expressions.push({
-                modifier: "max",
-                feature,
-                value: right,
-                comparator: "<=",
-              })
-            } else if (op2 === ">") {
-              expressions.push({
-                modifier: "min",
-                feature,
-                value: right,
-                comparator: ">",
-              })
-            } else if (op2 === ">=") {
-              expressions.push({
-                modifier: "min",
-                feature,
-                value: right,
-                comparator: ">=",
-              })
-            }
+            comparator = op2 as Comparator
+            expressions.push({
+              feature,
+              value: right,
+              comparator,
+            })
 
             return expressions
           }
 
           throw createSyntaxError()
-        }) || [],
+        }) ?? [],
     }
   })
 
@@ -378,7 +279,7 @@ export function match(
     }
 
     const expressionsMatch = expressions.every((expression) => {
-      const { feature, modifier } = expression
+      const { feature, comparator } = expression
       let expValue: string | number = expression.value
       let value = values[feature]
 
@@ -425,23 +326,17 @@ export function match(
         }
       }
 
-      switch (modifier) {
-        case "min": {
-          if (expression.comparator === ">") {
-            return value > expValue
-          }
-          if (expression.comparator === ">=") {
-            return value >= expValue
-          }
+      switch (comparator) {
+        case ">": {
+          return value > expValue
+        }
+        case ">=": {
           return value >= expValue
         }
-        case "max": {
-          if (expression.comparator === "<") {
-            return value < expValue
-          }
-          if (expression.comparator === "<=") {
-            return value <= expValue
-          }
+        case "<": {
+          return value < expValue
+        }
+        case "<=": {
           return value <= expValue
         }
         default: {

@@ -33,7 +33,7 @@ describe("parse()", () => {
     expect(parsed).toBeInstanceOf(Array)
     expect(parsed).toHaveLength(6)
     expect(parsed[0].expressions[0].feature).toBe("device-pixel-ratio")
-    expect(parsed[1].expressions[0].modifier).toBe("min")
+    expect(parsed[1].expressions[0].comparator).toBe(">=")
   })
 
   it("should throw a SyntaxError when a media query is invalid", () => {
@@ -361,11 +361,23 @@ describe("match()", () => {
             color: 1,
           }),
         ).toBe(true)
+        expect(
+          match("screen and (width >= 767px), screen and (color)", {
+            type: "screen",
+            color: 1,
+          }),
+        ).toBe(true)
       })
 
       it("should return true because of width and type", () => {
         expect(
           match("screen and (max-width: 1200px), handheld and (monochrome)", {
+            type: "screen",
+            width: 1100,
+          }),
+        ).toBe(true)
+        expect(
+          match("screen and (width <= 1200px), handheld and (monochrome)", {
             type: "screen",
             width: 1100,
           }),
@@ -379,6 +391,12 @@ describe("match()", () => {
             monochrome: 0,
           }),
         ).toBe(false)
+        expect(
+          match("screen and (width <= 1200px), handheld and (monochrome)", {
+            type: "screen",
+            monochrome: 0,
+          }),
+        ).toBe(false)
       })
     })
   })
@@ -387,6 +405,12 @@ describe("match()", () => {
     it("should take parsed ast and match it", () => {
       expect(
         match(parse("screen and (min-width: 767px) and (max-width: 979px)"), {
+          width: 800,
+          type: "screen",
+        }),
+      ).toBe(true)
+      expect(
+        match(parse("screen and (767px <= width <= 979px)"), {
           width: 800,
           type: "screen",
         }),

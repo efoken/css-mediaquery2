@@ -1,10 +1,18 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "categories": {
-    "correctness": "error"
+    "correctness": "error",
+    "nursery": "error",
+    "restriction": "error",
+    "perf": "error",
+    "suspicious": "error"
   },
   "plugins": ["typescript"],
   "rules": {
+    "no-shadow": "off",
+    "no-param-reassign": "off",
+    "typescript/explicit-function-return-type": "off",
+    "typescript/no-explicit-any": "off",
     "typescript/prefer-regexp-exec": "error"
   }
 }
