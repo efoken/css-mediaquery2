@@ -79,48 +79,59 @@ describe("match()", () => {
     describe("Width", () => {
       it("should return true for a width higher than a min-width", () => {
         expect(match("(min-width: 48em)", { width: "80em" })).toBe(true)
+        expect(match("(width >= 48em)", { width: "80em" })).toBe(true)
       })
 
       it("should return false for a width lower than a min-width", () => {
         expect(match("(min-width: 48em)", { width: "20em" })).toBe(false)
+        expect(match("(width >= 48em)", { width: "20em" })).toBe(false)
       })
 
       it("should return false when no width value is specified", () => {
         expect(match("(min-width: 48em)", { resolution: 72 })).toBe(false)
+        expect(match("(width >= 48em)", { resolution: 72 })).toBe(false)
       })
     })
 
     describe("Different Units", () => {
       it("should work with ems", () => {
         expect(match("(min-width: 500px)", { width: "48em" })).toBe(true)
+        expect(match("(width >= 500px)", { width: "48em" })).toBe(true)
       })
 
       it("should work with rems", () => {
         expect(match("(min-width: 500px)", { width: "48rem" })).toBe(true)
+        expect(match("(width >= 500px)", { width: "48rem" })).toBe(true)
       })
 
       it("should work with cm", () => {
         expect(match("(max-height: 1000px)", { height: "20cm" })).toBe(true)
+        expect(match("(height <= 1000px)", { height: "20cm" })).toBe(true)
       })
 
       it("should work with mm", () => {
         expect(match("(max-height: 1000px)", { height: "200mm" })).toBe(true)
+        expect(match("(height <= 1000px)", { height: "200mm" })).toBe(true)
       })
 
       it("should work with inch", () => {
         expect(match("(max-height: 1000px)", { height: "20in" })).toBe(false)
+        expect(match("(height <= 1000px)", { height: "20in" })).toBe(false)
       })
 
       it("should work with pt", () => {
         expect(match("(max-height: 1000px)", { height: "850pt" })).toBe(false)
+        expect(match("(height <= 1000px)", { height: "850pt" })).toBe(false)
       })
 
       it("should work with pc", () => {
         expect(match("(max-height: 1000px)", { height: "60pc" })).toBe(true)
+        expect(match("(height <= 1000px)", { height: "60pc" })).toBe(true)
       })
 
       it("should work with literal 0", () => {
         expect(match("(max-height: 1000px)", { height: 0 })).toBe(true)
+        expect(match("(height <= 1000px)", { height: 0 })).toBe(true)
       })
     })
   })
@@ -219,10 +230,12 @@ describe("match()", () => {
 
     it("should return false for a media query without a type when type is specified in the value object", () => {
       expect(match("(min-width: 500px)", { type: "screen" })).toBe(false)
+      expect(match("(width >= 500px)", { type: "screen" })).toBe(false)
     })
 
     it("should return true for a media query without a type when type is not specified in the value object", () => {
       expect(match("(min-width: 500px)", { width: 700 })).toBe(true)
+      expect(match("(width >= 500px)", { width: 700 })).toBe(true)
     })
   })
 
@@ -252,10 +265,19 @@ describe("match()", () => {
           width: 1000,
         }),
       ).toBe(false)
+      expect(
+        match("not all and (width >= 48em)", {
+          type: "all",
+          width: 1000,
+        }),
+      ).toBe(false)
     })
 
     it("should return true for inverted value", () => {
       expect(match("not screen and (min-width: 48em)", { width: "24em" })).toBe(
+        true,
+      )
+      expect(match("not screen and (width >= 48em)", { width: "24em" })).toBe(
         true,
       )
     })
@@ -270,6 +292,12 @@ describe("match()", () => {
             width: 980,
           }),
         ).toBe(true)
+        expect(
+          match("screen and (width >= 767px)", {
+            type: "screen",
+            width: 980,
+          }),
+        ).toBe(true)
       })
 
       it("should return true because of width is within bounds", () => {
@@ -279,11 +307,23 @@ describe("match()", () => {
             width: 800,
           }),
         ).toBe(true)
+        expect(
+          match("screen and (767px <= width <= 979px)", {
+            type: "screen",
+            width: 800,
+          }),
+        ).toBe(true)
       })
 
       it("should return false because width is out of bounds", () => {
         expect(
           match("screen and (min-width: 767px) and (max-width: 979px)", {
+            type: "screen",
+            width: 980,
+          }),
+        ).toBe(false)
+        expect(
+          match("screen and (767px <= width < 980px)", {
             type: "screen",
             width: 980,
           }),
