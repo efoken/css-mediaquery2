@@ -43,7 +43,7 @@ interface QueryNode {
 
 export type AST = QueryNode[]
 
-export const remBase = 16
+const REM_BASE = 16
 
 const toString = (string: string | number) => string.toString().toLowerCase()
 
@@ -75,8 +75,8 @@ const toPx = (length: string | number) => {
   const units = RE_LENGTH_UNIT.exec(toString(length))?.[1]
 
   const unitMap: Record<string, number> = {
-    em: remBase,
-    rem: remBase,
+    em: REM_BASE,
+    rem: REM_BASE,
     cm: 96 / 2.54,
     mm: 96 / 25.4,
     in: 96,
@@ -255,5 +255,4 @@ export function match(
 export default {
   match,
   parse,
-  remBase,
 }

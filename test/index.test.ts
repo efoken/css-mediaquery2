@@ -1,4 +1,5 @@
-import { parse, match } from "../src"
+import { describe, it, expect } from "vitest"
+import { parse, match } from "../src/index.ts"
 
 describe("parse()", () => {
   it("should parse media queries without expressions", () => {
